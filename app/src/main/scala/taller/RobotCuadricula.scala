@@ -32,7 +32,15 @@ class RobotCuadricula {
   // Punto 2 -------------------------------------------------------------------
 
   /** El estado que resulta de aplicarle la orden al estado dado. */
-  def ejecutar(e: Estado, o: Orden): Estado = ???
+  def ejecutar(e: Estado, o: Orden): Estado = (e,o) match {
+
+    case(Girar(sentido))=> e
+    case((Estado(x,y,Norte),(Avanzar(pasos)))) => Estado(x,y + pasos ,Norte)
+
+    case (Repetir(veces: Int, orden: Orden))=> e
+    case(Secuencia(ordenes: List[Orden]) ) =>e
+
+  }
 
   // Punto 3 -------------------------------------------------------------------
 
