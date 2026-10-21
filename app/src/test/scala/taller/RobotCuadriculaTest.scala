@@ -28,7 +28,7 @@ class RobotCuadriculaTest extends AnyFunSuite {
   test("girar: un giro y su contrario se cancelan") {
     assert(girar(girar(Este, Derecha), Izquierda) == Este)
   }
-// Mis test propios
+// Mis test propios punto 1
   test("girar: Este a la derecha da Sur") { assert(girar(Este, Derecha) == Sur) }
   test("girar: Este a la izquierda da Norte") { assert(girar(Este, Izquierda) == Norte) }
   test("girar: Sur a la derecha da Oeste") { assert(girar(Sur, Derecha) == Oeste) }
@@ -63,7 +63,7 @@ class RobotCuadriculaTest extends AnyFunSuite {
     assert(ejecutar(inicial, Repetir(0, Avanzar(5))) == inicial)
   }
 
-  test("ejecutar: la secuencia vacía no hace nada") {
+ test("ejecutar: la secuencia vacía no hace nada") {
     assert(ejecutar(inicial, Secuencia(Nil)) == inicial)
   }
 
@@ -74,7 +74,30 @@ class RobotCuadriculaTest extends AnyFunSuite {
   test("ejecutar: avanzar al oeste disminuye x") {
     assert(ejecutar(Estado(5, 5, Oeste), Avanzar(2)) == Estado(3, 5, Oeste))
   }
+// Mis test propios punto 2
+  test("ejecutar: girar a la izquierda cambia la dirección sin mover al robot") {
+    assert(ejecutar(Estado(2, 3, Sur), Girar(Izquierda)) == Estado(2, 3, Este))
+  }
 
+  test("ejecutar: avanzar al este desde un estado distinto del inicial aumenta x") {
+    assert(ejecutar(Estado(-1, 4, Este), Avanzar(3)) == Estado(2, 4, Este))
+  }
+
+  test("ejecutar: un repetir dentro de otro multiplica las repeticiones") {
+    assert(ejecutar(inicial, Repetir(2, Repetir(3, Avanzar(1)))) == Estado(0, 6, Norte))
+  }
+
+  test("ejecutar: una secuencia que pasa por las cuatro direcciones") {
+    val espiral = Secuencia(List(Avanzar(1), Girar(Izquierda), Avanzar(2), Girar(Izquierda),
+      Avanzar(3), Girar(Izquierda), Avanzar(4)))
+    assert(ejecutar(inicial, espiral) == Estado(2, -2, Este))
+  }
+
+  test("ejecutar: dar media vuelta y avanzar lleva al robot hacia atrás") {
+    assert(ejecutar(inicial, Secuencia(List(Repetir(2, Girar(Derecha)), Avanzar(5)))) ==
+      Estado(0, -5, Sur))
+  }
+/*
     // Punto 3 -------------------------------------------------------------------
 
     test("cuantasBasicas: una orden básica cuenta uno") {
@@ -209,5 +232,5 @@ class RobotCuadriculaTest extends AnyFunSuite {
     }
 
 
-
+*/
 }
