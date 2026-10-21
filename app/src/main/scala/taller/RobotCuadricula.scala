@@ -57,24 +57,44 @@ class RobotCuadricula {
   // Punto 3 -------------------------------------------------------------------
 
   /** Cuántos Avanzar y Girar llega a ejecutar la orden, contando repeticiones. */
-  def cuantasBasicas(o: Orden): Int = ???
+  def cuantasBasicas(o: Orden): Int = o match {
+
+    case Avanzar(_) => 1
+    case Girar(_) => 1
+    case Repetir(veces, orden) => math.max(veces, 0) * cuantasBasicas(orden)
+    case Secuencia(ordenes) => ordenes.map(cuantasBasicas).sum
+  }
 
   /** Niveles de anidamiento: una básica tiene 1, una compuesta uno más que la más honda. */
-  def profundidad(o: Orden): Int = ???
+  def profundidad(o: Orden): Int = o match {
+
+    case Avanzar(_) => 1
+    case Girar(_) => 1
+    case Repetir(_, orden) => 1 + profundidad(orden)
+    case Secuencia(ordenes) => 1 + ordenes.map(profundidad).maxOption.getOrElse(0)
+  }
 
   // Punto 4 -------------------------------------------------------------------
 
   /** La secuencia de las dos órdenes. */
-  def componer(o1: Orden, o2: Orden): Orden = ???
+  def componer(o1: Orden, o2: Orden): Orden = Secuencia(List(o1, o2))
 
   /** Currificada: fijados los pasos y el giro, queda una función de las veces. */
-  def rutina(pasos: Int)(giro: Sentido)(veces: Int): Orden = ???
+  def rutina(pasos: Int)(giro: Sentido)(veces: Int): Orden =
+    Repetir(veces, Secuencia(List(Avanzar(pasos), Girar(giro))))
 
   /** La misma orden ejecutada sobre cada uno de los estados. */
-  def aplicarA(estados: List[Estado], o: Orden): List[Estado] = ???
+  def aplicarA(estados: List[Estado], o: Orden): List[Estado] =
+    estados.map(e => ejecutar(e, o))
 
   /** Reemplaza cada orden básica por f(orden), respetando la estructura de las compuestas. */
-  def transformar(o: Orden, f: Orden => Orden): Orden = ???
+  def transformar(o: Orden, f: Orden => Orden): Orden = o match {
+
+    case Avanzar(_) => f(o)
+    case Girar(_) => f(o)
+    case Repetir(veces, orden) => Repetir(veces, transformar(orden, f))
+    case Secuencia(ordenes) => Secuencia(ordenes.map(x => transformar(x, f)))
+  }
 
   // Punto 5 -------------------------------------------------------------------
 
