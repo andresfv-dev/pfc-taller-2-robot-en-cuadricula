@@ -97,7 +97,7 @@ class RobotCuadriculaTest extends AnyFunSuite {
     assert(ejecutar(inicial, Secuencia(List(Repetir(2, Girar(Derecha)), Avanzar(5)))) ==
       Estado(0, -5, Sur))
   }
-/*
+
     // Punto 3 -------------------------------------------------------------------
 
     test("cuantasBasicas: una orden básica cuenta uno") {
@@ -232,5 +232,5 @@ class RobotCuadriculaTest extends AnyFunSuite {
     }
 
 
-*/
+
 }
