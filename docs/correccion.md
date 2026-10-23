@@ -978,3 +978,237 @@ Están en `RobotCuadriculaPunto4Test.scala`.
 | `transformar` con `triple` conserva cuenta y profundidad | la forma se conserva (4) |
 | $f(o) = \text{Repetir}(2, o)$ se aplica una sola vez | terminación: no se recorre el resultado de $f$ (3.4) |
 | triplicar los avances de `Sec[Avanzar(2), Avanzar(1)]` lleva a $(0, 9, \text{Norte})$ | $T_f$ junto con $F$ del punto 2 |
+
+---
+
+# Informe de corrección — Punto 5: `simplificar`
+
+## 1. El programa
+
+```scala
+def simplificar(o: Orden): Orden = {
+
+  def reducir(ordenes: List[Orden]): List[Orden] = ordenes match {
+    case Nil                               => Nil
+    case Avanzar(0) :: resto               => reducir(resto)
+    case Secuencia(internas) :: resto      => internas ++ reducir(resto)
+    case Avanzar(a) :: Avanzar(b) :: resto => reducir(Avanzar(a + b) :: resto)
+    case primera :: resto                  => primera :: reducir(resto)
+  }
+
+  def pasada(o: Orden): Orden = o match {
+    case Avanzar(_)                      => o
+    case Girar(_)                        => o
+    case Repetir(veces, _) if veces <= 0 => Secuencia(Nil)
+    case Repetir(1, orden)               => orden
+    case Repetir(_, Secuencia(Nil))      => Secuencia(Nil)
+    case Repetir(veces, orden)           => Repetir(veces, pasada(orden))
+    case Secuencia(List(unica))          => unica
+    case Secuencia(ordenes)              => Secuencia(reducir(ordenes).map(pasada))
+  }
+
+  def hastaQueNoCambie(actual: Orden): Orden = {
+    val siguiente = pasada(actual)
+    if (siguiente == actual) actual else hastaQueNoCambie(siguiente)
+  }
+
+  hastaQueNoCambie(o)
+}
+```
+
+Seguimos la notación del punto 2: $F$ es el efecto de una orden, $F_o$
+denota $e \mapsto F(e, o)$ y ya está demostrado que
+$\forall o, \forall e : P_e(e, o) == F(e, o)$, donde $P_e$ = `ejecutar`. Por
+eso basta con razonar sobre $F$.
+
+Para una lista $l = [o_1, \ldots, o_k]$ escribimos
+
+```math
+C(l) = F_{o_k} \circ \cdots \circ F_{o_1}, \qquad C(\text{Nil}) = \text{id}
+```
+
+de modo que $F_{\text{Secuencia}(l)} = C(l)$. De la definición sale
+directamente que $C(l_1 +\!+ l_2) = C(l_2) \circ C(l_1)$.
+
+## 2. La especificación
+
+Lo que pide el enunciado es que simplificar no cambie el resultado:
+
+```math
+\forall o \in \text{Orden},\ \forall e \in \text{Estado} : P_e\big(e, \text{simplificar}(o)\big) == P_e(e, o)
+```
+
+que, por el teorema del punto 2, es lo mismo que
+$F_{\text{simplificar}(o)} = F_o$. Además se pide que la orden que sale no se
+pueda simplificar más (idempotencia):
+
+```math
+\forall o : \text{simplificar}(\text{simplificar}(o)) == \text{simplificar}(o)
+```
+
+Para la terminación usamos el tamaño de una orden, el número de nodos de su
+árbol:
+
+```math
+|\text{Avanzar}(n)| = |\text{Girar}(s)| = 1, \qquad |\text{Repetir}(n, o)| = 1 + |o|, \qquad |\text{Secuencia}([o_1, \ldots, o_k])| = 1 + \sum_{i=1}^{k} |o_i|
+```
+
+y, para una lista, $\|l\| = \sum_i |o_i|$.
+
+## 3. Demostración
+
+### 3.1 Dos hechos sobre $F$
+
+**Avanzar cero es la identidad.** Para todo $(x, y, d)$:
+
+```math
+F\big((x, y, d), \text{Avanzar}(0)\big) = (x + 0, y + 0, d) = (x, y, d)
+```
+
+**Dos avances seguidos son uno solo.** `Avanzar` no cambia la dirección, así
+que el segundo avance se hace con la misma $d$:
+
+```math
+\begin{aligned}
+\big(F_{\text{Avanzar}(b)} \circ F_{\text{Avanzar}(a)}\big)(x, y, d)
+  &= F_{\text{Avanzar}(b)}\big(x + a\Delta_x(d),\ y + a\Delta_y(d),\ d\big) \\
+  &= \big(x + (a + b)\Delta_x(d),\ y + (a + b)\Delta_y(d),\ d\big) \\
+  &= F_{\text{Avanzar}(a + b)}(x, y, d)
+\end{aligned}
+```
+
+### 3.2 `reducir` no cambia el efecto de la lista
+
+**Lema 1.** $\forall l : C(\text{reducir}(l)) = C(l)$ y
+$\|\text{reducir}(l)\| \le \|l\|$, con igualdad solo si
+$\text{reducir}(l) = l$.
+
+Por inducción sobre la longitud de $l$. Las llamadas recursivas de `reducir`
+son todas sobre listas más cortas: `resto`, o `Avanzar(a + b) :: resto`, que
+tiene un elemento menos que `Avanzar(a) :: Avanzar(b) :: resto`.
+
+- **`Nil`.** $C(\text{Nil}) = C(\text{Nil})$.
+- **R5: `Avanzar(0) :: resto`.** Por 3.1 e HI:
+  $C(\text{reducir}(\text{resto})) = C(\text{resto}) = C(\text{resto}) \circ \text{id} = C(\text{Avanzar}(0) :: \text{resto})$.
+  El tamaño baja en 1 por lo menos.
+- **R6: `Secuencia(internas) :: resto`.**
+  $C(\text{internas} +\!+ \text{reducir}(\text{resto})) = C(\text{reducir}(\text{resto})) \circ C(\text{internas}) = C(\text{resto}) \circ F_{\text{Secuencia(internas)}}$
+  por HI y por la definición de $F$ en una secuencia. Eso es
+  $C(\text{Secuencia(internas)} :: \text{resto})$. Se pierde el nodo de la
+  secuencia interna, así que el tamaño baja en 1.
+- **R7: `Avanzar(a) :: Avanzar(b) :: resto`.** Por HI y 3.1:
+  $C(\text{reducir}(\text{Avanzar}(a+b) :: \text{resto})) = C(\text{resto}) \circ F_{\text{Avanzar}(a+b)} = C(\text{resto}) \circ F_{\text{Avanzar}(b)} \circ F_{\text{Avanzar}(a)}$.
+  Dos nodos se cambian por uno.
+- **`primera :: resto`.** $C(\text{primera} :: \text{reducir}(\text{resto})) = C(\text{reducir}(\text{resto})) \circ F_{\text{primera}} = C(\text{resto}) \circ F_{\text{primera}}$.
+  El tamaño es igual solo si `reducir(resto) == resto`.
+
+El orden de los casos importa: el de `primera :: resto` va al final para que
+solo se use cuando no aplica ninguna regla.
+
+### 3.3 Una pasada no cambia el efecto
+
+**Lema 2.** $\forall o : F_{\text{pasada}(o)} = F_o$, y
+$|\text{pasada}(o)| \le |o|$ con igualdad solo si $\text{pasada}(o) = o$.
+
+Por inducción estructural fuerte sobre $o$: suponemos la propiedad para
+toda orden de tamaño menor que $|o|$. Se hace regla por regla, en el orden
+del `match`.
+
+**Casos base: `Avanzar(n)` y `Girar(s)`.** `pasada` devuelve `o`. Las dos
+partes son inmediatas.
+
+**R1: `Repetir(n, o')` con $n \le 0$.** Por la definición de $F$:
+
+```math
+F_{\text{Repetir}(n, o')} = F_{o'}^{\,\max(n, 0)} = F_{o'}^{\,0} = \text{id} = C(\text{Nil}) = F_{\text{Secuencia(Nil)}}
+```
+
+El tamaño pasa de $1 + |o'| \ge 2$ a $1$.
+
+**R2: `Repetir(1, o')`.** $F_{\text{Repetir}(1, o')} = F_{o'}^{\,1} = F_{o'}$.
+El tamaño pasa de $1 + |o'|$ a $|o'|$.
+
+**R3: `Repetir(n, Secuencia(Nil))` con $n \ge 2$** (los $n \le 1$ ya los
+tomaron R1 y R2). $F_{\text{Repetir}(n, \text{Secuencia(Nil)})} = \text{id}^{\,n} = \text{id} = F_{\text{Secuencia(Nil)}}$.
+El tamaño pasa de 2 a 1.
+
+**`Repetir(n, o')` en los demás casos.** Como $|o'| < |o|$, por HI
+$F_{\text{pasada}(o')} = F_{o'}$, y entonces
+
+```math
+F_{\text{Repetir}(n, \text{pasada}(o'))} = F_{\text{pasada}(o')}^{\,\max(n,0)} = F_{o'}^{\,\max(n,0)} = F_{\text{Repetir}(n, o')}
+```
+
+Por HI también $|\text{pasada}(o')| \le |o'|$, con igualdad solo si no cambió.
+
+**R4: `Secuencia(List(u))`.** $C([u]) = F_u$. El tamaño pasa de $1 + |u|$
+a $|u|$.
+
+**`Secuencia(l)` en los demás casos.** Sea $l' = \text{reducir}(l)$. Cada
+elemento de $l'$ es un elemento de $l$, un elemento de una secuencia que
+estaba en $l$, o un `Avanzar(a + b)`; en los tres casos su tamaño es menor que
+$|\text{Secuencia}(l)|$, así que vale la HI sobre él. Entonces:
+
+```math
+F_{\text{Secuencia}(l'.\text{map(pasada)})} = C(l'.\text{map(pasada)}) \overset{\text{HI}}{=} C(l') \overset{\text{Lema 1}}{=} C(l) = F_{\text{Secuencia}(l)}
+```
+
+Para el tamaño: el Lema 1 da $\|l'\| \le \|l\|$ y la HI da que `map(pasada)`
+no aumenta ningún elemento. Si el tamaño quedó igual, nada cambió ni en
+`reducir` ni en ningún `pasada`, así que el resultado es la misma orden.
+
+### 3.4 `hastaQueNoCambie` y el teorema
+
+**Terminación.** Cada llamado recursivo de `hastaQueNoCambie` se hace
+cuando $\text{pasada}(actual) \ne actual$, y por el Lema 2 eso implica
+$|\text{pasada}(actual)| < |actual|$. El tamaño es un entero positivo que
+baja en cada llamado, así que hay a lo sumo $|o|$ pasadas. `reducir` termina
+porque cada llamado es sobre una lista más corta y `pasada` porque cada
+llamado es sobre una orden de menor tamaño (3.3).
+
+**Corrección.** Si $o_0 = o$ y $o_{i+1} = \text{pasada}(o_i)$, por el Lema 2
+y por inducción sobre $i$:
+
+```math
+F_{o_0} = F_{o_1} = \cdots = F_{o_m} = F_{\text{simplificar}(o)}
+```
+
+y con el teorema del punto 2:
+
+```math
+\forall o,\ \forall e : P_e\big(e, \text{simplificar}(o)\big) == F\big(e, \text{simplificar}(o)\big) = F(e, o) == P_e(e, o)
+```
+
+**Idempotencia.** `hastaQueNoCambie` solo devuelve $r$ cuando
+$\text{pasada}(r) = r$. Entonces `simplificar(r)` hace una sola pasada, ve que
+no cambió y devuelve $r$: $\text{simplificar}(\text{simplificar}(o)) = \text{simplificar}(o)$.
+
+## 4. Propiedades que se deducen de la especificación
+
+**La orden no crece.** $|\text{simplificar}(o)| \le |o|$, por 3.4.
+
+**No aumentan las básicas.** Ninguna regla aumenta `cuantasBasicas`: R1 y R3
+pasan de $0$ a $0$; R2, R4 y R6 no cambian la cuenta; R5 la baja en 1 y R7 en
+1. Dentro de un `Repetir(n, ...)` el cambio se multiplica por $\max(n, 0) \ge 0$,
+así que tampoco crece.
+
+**El cuadrado ya está simplificado.** En `Repetir(4, Sec[Avanzar(1), Girar(D)])`
+no aplica ninguna regla, así que `simplificar(cuadrado) == cuadrado`.
+
+**El resultado no depende del estado.** El teorema vale para todo $e$, por eso
+en las pruebas se revisa con varios estados de partida.
+
+## 5. Casos de prueba propios
+
+Están en `RobotCuadriculaPunto5Test.scala`.
+
+| Prueba | Qué cubre de la demostración |
+|---|---|
+| `Avanzar(7)` y `Girar(I)` quedan iguales | casos base de `pasada` (3.3) |
+| `Repetir(-3, Girar(D))` da `Secuencia(Nil)` | R1 con $n < 0$: $F^{\max(n,0)} = \text{id}$ |
+| `Sec[A(1), Sec[A(2), Girar(I)]]` da `Sec[A(3), Girar(I)]` | R6 y después R7 (Lema 1) |
+| `Sec[A(1), Rep(1, Sec[A(0), A(5)])]` da `A(6)` | varias pasadas: R2, R6, R7 y R4 (ejemplo del informe de proceso) |
+| `Repetir(5, Sec[A(3), A(-3)])` da `Secuencia(Nil)` | R7, R5 y luego R3 |
+| `simplificar(cuadrado) == cuadrado` | ninguna regla aplica (4) |
+| el efecto no cambia con repeticiones y secuencias anidadas, desde tres estados | el teorema de 3.4 |
+| `cuantasBasicas` no aumenta | propiedad de la sección 4 |
