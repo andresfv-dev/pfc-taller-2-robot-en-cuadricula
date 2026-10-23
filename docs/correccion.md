@@ -456,3 +456,525 @@ veces.)
 
 Junto con las pruebas dadas, se ejercitan las cuatro ramas de `Avanzar`, la
 de `Girar`, las dos ramas de `Repetir` y las dos de `Secuencia`.
+
+---
+
+# Informe de corrección — Punto 3: `cuantasBasicas` y `profundidad`
+
+## 1. El programa
+
+```scala
+def cuantasBasicas(o: Orden): Int = o match {
+  case Avanzar(_)            => 1
+  case Girar(_)              => 1
+  case Repetir(veces, orden) => math.max(veces, 0) * cuantasBasicas(orden)
+  case Secuencia(ordenes)    => ordenes.map(cuantasBasicas).sum
+}
+
+def profundidad(o: Orden): Int = o match {
+  case Avanzar(_)         => 1
+  case Girar(_)           => 1
+  case Repetir(_, orden)  => 1 + profundidad(orden)
+  case Secuencia(ordenes) => 1 + ordenes.map(profundidad).maxOption.getOrElse(0)
+}
+```
+
+Sea $P_c$ = `cuantasBasicas` y $P_p$ = `profundidad`. Las dos son recursivas
+porque `Orden` lo es, así que la demostración es por **inducción estructural
+sobre `Orden`**: un caso base por `Avanzar` y otro por `Girar`, y un caso de
+inducción por `Repetir` y otro por `Secuencia`.
+
+A diferencia de `ejecutar`, aquí cada llamado recursivo (directo o a través
+de `map`) se hace sobre una orden que está **dentro** de la orden original.
+`Repetir` no se resuelve bajando las veces de una en una sino multiplicando,
+así que no hace falta una segunda inducción.
+
+Del comportamiento de las listas de Scala se usa solo esto:
+
+```math
+[o_1, \ldots, o_k].\text{map}(g) = [g(o_1), \ldots, g(o_k)], \qquad [a_1, \ldots, a_k].\text{sum} = \sum_{i=1}^{k} a_i
+```
+
+```math
+[a_1, \ldots, a_k].\text{maxOption} = \begin{cases} \text{None} & k = 0 \\ \text{Some}(\max_i a_i) & k \ge 1 \end{cases}
+```
+
+## 2. La especificación
+
+### 2.1 `cuantasBasicas`
+
+El enunciado pide contar cuántos `Avanzar` y `Girar` **llega a ejecutar** la
+orden. Para decirlo sin mirar el código, definimos $L(o)$, la lista de
+órdenes básicas que se ejecutan al cumplir $o$, en el orden en que se
+ejecutan ($+\!+$ es concatenar listas y $\ell^{m}$ es la lista $\ell$
+concatenada $m$ veces, con $\ell^{0} = [\,]$):
+
+```math
+L(\text{Avanzar}(n)) = [\text{Avanzar}(n)], \qquad L(\text{Girar}(s)) = [\text{Girar}(s)]
+```
+
+```math
+L(\text{Repetir}(n, o)) = L(o)^{\max(n, 0)}, \qquad L(\text{Secuencia}([o_1, \ldots, o_k])) = L(o_1) +\!+ \cdots +\!+ L(o_k)
+```
+
+Esta lista corresponde con la especificación $F$ del punto 2: como $F$ de
+`Repetir` es aplicar $F_o$ $\max(n, 0)$ veces y $F$ de `Secuencia` es
+componer en orden, ejecutar $o$ es aplicar una tras otra las básicas de
+$L(o)$. La función que se quiere calcular es su longitud,
+$\lvert L(o) \rvert$, y de la longitud se usan dos hechos:
+
+```math
+\lvert \ell_1 +\!+ \ell_2 \rvert = \lvert \ell_1 \rvert + \lvert \ell_2 \rvert, \qquad \lvert \ell^{m} \rvert = m \cdot \lvert \ell \rvert
+```
+
+### 2.2 `profundidad`
+
+Una orden se ve como un árbol: las básicas son hojas, `Repetir` tiene un
+hijo y `Secuencia` tiene un hijo por cada orden de la lista. La profundidad
+es la cantidad de niveles de ese árbol, que el enunciado describe así:
+
+```math
+h(\text{Avanzar}(n)) = h(\text{Girar}(s)) = 1, \qquad h(\text{Repetir}(n, o)) = 1 + h(o)
+```
+
+```math
+h(\text{Secuencia}([o_1, \ldots, o_k])) = 1 + \max\{h(o_1), \ldots, h(o_k)\}, \quad \text{con } \max \emptyset = 0
+```
+
+Hay que demostrar:
+
+```math
+\forall o \in \text{Orden} : P_c(o) == \lvert L(o) \rvert \ \wedge\ P_p(o) == h(o)
+```
+
+## 3. Demostración
+
+### 3.1 Los `match` son exhaustivos
+
+Cada función tiene un caso por cada una de las cuatro alternativas de
+`Orden`, que es `sealed trait`, así que el compilador confirma que no falta
+ninguna. En las básicas se usa `_`, que acepta cualquier número o sentido.
+Además, `maxOption` no falla con la lista vacía (`max` sí lanzaría una
+excepción), así que ninguna de las dos funciones lanza errores.
+
+### 3.2 `cuantasBasicas`
+
+**Casos base.** Por el modelo de sustitución:
+
+```math
+P_c(\text{Avanzar}(n)) \rightarrow 1 = \lvert [\text{Avanzar}(n)] \rvert = \lvert L(\text{Avanzar}(n)) \rvert
+```
+
+y de la misma forma $P_c(\text{Girar}(s)) \rightarrow 1 = \lvert L(\text{Girar}(s)) \rvert$.
+
+**Caso de inducción `Repetir(n, o)`.** HI: $P_c(o) == \lvert L(o) \rvert$.
+
+```math
+\begin{aligned}
+P_c(\text{Repetir}(n, o))
+  &\rightarrow \max(n, 0) \cdot P_c(o) \\
+  &= \max(n, 0) \cdot \lvert L(o) \rvert && \text{(HI)} \\
+  &= \lvert L(o)^{\max(n, 0)} \rvert && \text{(longitud de } \ell^{m}\text{)} \\
+  &= \lvert L(\text{Repetir}(n, o)) \rvert
+\end{aligned}
+```
+
+**Caso de inducción `Secuencia([o_1, ..., o_k])`.** HI: para cada $i$,
+$P_c(o_i) == \lvert L(o_i) \rvert$.
+
+```math
+\begin{aligned}
+P_c(\text{Secuencia}([o_1, \ldots, o_k]))
+  &\rightarrow [o_1, \ldots, o_k].\text{map}(P_c).\text{sum} \\
+  &= [P_c(o_1), \ldots, P_c(o_k)].\text{sum} = \sum_{i=1}^{k} P_c(o_i) \\
+  &= \sum_{i=1}^{k} \lvert L(o_i) \rvert && \text{(HI)} \\
+  &= \lvert L(o_1) +\!+ \cdots +\!+ L(o_k) \rvert && \text{(longitud de } +\!+\text{)} \\
+  &= \lvert L(\text{Secuencia}([o_1, \ldots, o_k])) \rvert
+\end{aligned}
+```
+
+Con $k = 0$ la suma vacía es $0$ y $L(\text{Secuencia}(\text{Nil})) = [\,]$,
+de longitud $0$, así que el caso también vale.
+
+### 3.3 `profundidad`
+
+**Casos base.** $P_p(\text{Avanzar}(n)) \rightarrow 1 = h(\text{Avanzar}(n))$,
+y lo mismo para `Girar`.
+
+**Caso de inducción `Repetir(n, o)`.** HI: $P_p(o) == h(o)$.
+
+```math
+P_p(\text{Repetir}(n, o)) \rightarrow 1 + P_p(o) = 1 + h(o) = h(\text{Repetir}(n, o))
+```
+
+**Caso de inducción `Secuencia([o_1, ..., o_k])`.** HI: para cada $i$,
+$P_p(o_i) == h(o_i)$. Si $k \ge 1$:
+
+```math
+\begin{aligned}
+P_p(\text{Secuencia}([o_1, \ldots, o_k]))
+  &\rightarrow 1 + [P_p(o_1), \ldots, P_p(o_k)].\text{maxOption}.\text{getOrElse}(0) \\
+  &= 1 + \text{Some}\big(\max_i P_p(o_i)\big).\text{getOrElse}(0) = 1 + \max_i P_p(o_i) \\
+  &= 1 + \max_i h(o_i) && \text{(HI)} \\
+  &= h(\text{Secuencia}([o_1, \ldots, o_k]))
+\end{aligned}
+```
+
+Si $k = 0$:
+
+```math
+P_p(\text{Secuencia}(\text{Nil})) \rightarrow 1 + \text{None}.\text{getOrElse}(0) = 1 + 0 = 1 = h(\text{Secuencia}(\text{Nil}))
+```
+
+### 3.4 Conclusión
+
+```mermaid
+graph TD
+    O["Orden o"] --> A["Avanzar(n): caso base, P_c = 1, P_p = 1"]
+    O --> G["Girar(s): caso base, P_c = 1, P_p = 1"]
+    O --> R["Repetir(n, o'): HI sobre o', 3.2 y 3.3"]
+    O --> S["Secuencia(l): HI sobre cada o_i, 3.2 y 3.3"]
+```
+
+Los cuatro casos son todas las alternativas de `Orden`; por el principio de
+inducción estructural:
+
+```math
+\forall o \in \text{Orden} : P_c(o) == \lvert L(o) \rvert \ \wedge\ P_p(o) == h(o)
+```
+
+### 3.5 Terminación
+
+Sea $\text{tam}(o)$ la cantidad de constructores de la orden. Cada llamado
+recursivo se hace sobre la orden de adentro de un `Repetir` o sobre un
+elemento de la lista de una `Secuencia`, y las dos tienen $\text{tam}$
+estrictamente menor que la orden original. Como $\text{tam}$ es un número
+natural, no puede bajar para siempre: las dos funciones terminan.
+
+Hay una diferencia con `ejecutar`: allí `Repetir(n, o)` hace $n$ rondas de
+llamados, y aquí hace uno solo y multiplica. Por eso
+`cuantasBasicas(Repetir(1000, C))` cuesta lo mismo que
+`cuantasBasicas(Repetir(4, C))`.
+
+## 4. Propiedades que se deducen de la especificación
+
+**Las repeticiones anidadas se multiplican.** Para $a, b \ge 0$:
+
+```math
+\lvert L(\text{Repetir}(a, \text{Repetir}(b, o))) \rvert = a \cdot b \cdot \lvert L(o) \rvert
+```
+
+(Pruebas: `Repetir(2, Repetir(3, Girar(Derecha)))` cuenta $2 \cdot 3 = 6$, y
+`Repetir(n, cuadrado)` cuenta $8n$ para $n \in \{0, 1, 2, 5, 10\}$).
+
+**Repetir con veces negativas no ejecuta nada.** Si $n < 0$,
+$\max(n, 0) = 0$ y la cuenta es $0$, igual que `ejecutar`, que con
+`veces <= 0` deja el estado como estaba. (Prueba: `Repetir(-2, Avanzar(1))`).
+
+**La profundidad no depende de las veces.** $h(\text{Repetir}(n, o)) = 1 + h(o)$
+para cualquier $n$. (Prueba: `Repetir(n, cuadrado)` tiene profundidad 4 con
+$n = 0, 1, 7$).
+
+**Cada compuesta agrega exactamente un nivel, aunque esté vacía.** Por eso
+`Secuencia(Nil)` dentro de otra secuencia también cuenta como nivel.
+(Prueba: `Secuencia([Avanzar(1), Secuencia([Girar(I), Secuencia(Nil)])])`
+tiene profundidad 3).
+
+**Relación con `ejecutar`.** $\lvert L(o) \rvert$ es la cantidad de llamados de
+`ejecutar` que caen en un caso base. En la traza del cuadrado del punto 2
+son 8 de los 25 llamados, y `cuantasBasicas(cuadrado) == 8`.
+
+## 5. Casos de prueba propios
+
+Están en `RobotCuadriculaPunto3Test.scala`.
+
+| Prueba | Qué cubre de la demostración |
+|---|---|
+| `Girar(Izquierda)` cuenta 1 | caso base `Girar` (3.2) |
+| `Repetir(3, Avanzar(2))` cuenta 3 | caso `Repetir` sobre una básica |
+| `Repetir(2, Repetir(3, Girar(D)))` cuenta 6 | `Repetir` con HI sobre otro `Repetir`; propiedad de multiplicación (4) |
+| secuencia con un `Repetir` adentro cuenta 6 | caso `Secuencia` (3.2) sumando una compuesta |
+| `Repetir(-2, Avanzar(1))` cuenta 0 | rama de $\max(n, 0) = 0$ |
+| `Repetir(n, cuadrado)` cuenta $n \cdot 8$ | $\lvert \ell^{m} \rvert = m \cdot \lvert \ell \rvert$ para varios $m$ |
+| `Girar(Izquierda)` tiene profundidad 1 | caso base de $h$ (3.3) |
+| `Repetir(5, Avanzar(1))` tiene profundidad 2 | caso `Repetir` de $h$ |
+| `Repetir(2, Repetir(3, Girar(D)))` tiene profundidad 3 | `Repetir` anidado |
+| secuencia con `Secuencia(Nil)` anidada tiene profundidad 3 | rama $k = 0$ dentro de otra secuencia |
+| `Repetir(2, Sec[Avanzar(1), Repetir(3, Girar(D))])` tiene profundidad 4 | el máximo escoge la rama más honda |
+| `Repetir(n, cuadrado)` tiene profundidad 4 para $n = 0, 1, 7$ | la profundidad no depende de las veces (4) |
+
+---
+
+# Informe de corrección — Punto 4: `componer`, `rutina`, `aplicarA` y `transformar`
+
+## 1. El programa
+
+```scala
+def componer(o1: Orden, o2: Orden): Orden = Secuencia(List(o1, o2))
+
+def rutina(pasos: Int)(giro: Sentido)(veces: Int): Orden =
+  Repetir(veces, Secuencia(List(Avanzar(pasos), Girar(giro))))
+
+def aplicarA(estados: List[Estado], o: Orden): List[Estado] =
+  estados.map(e => ejecutar(e, o))
+
+def transformar(o: Orden, f: Orden => Orden): Orden = o match {
+  case Avanzar(_)            => f(o)
+  case Girar(_)              => f(o)
+  case Repetir(veces, orden) => Repetir(veces, transformar(orden, f))
+  case Secuencia(ordenes)    => Secuencia(ordenes.map(x => transformar(x, f)))
+}
+```
+
+`componer`, `rutina` y `aplicarA` no son recursivas: se demuestran con el
+modelo de sustitución y con el teorema del punto 2,
+
+```math
+\forall o,\ \forall e : P_e(e, o) == F(e, o)
+```
+
+donde $P_e$ = `ejecutar`, $F$ es su especificación y $F_o$ denota
+$e \mapsto F(e, o)$. `transformar` sí es recursiva y se demuestra por
+inducción estructural sobre `Orden`.
+
+## 2. La especificación
+
+| Función | Lo que debe cumplir |
+|---|---|
+| `componer(o1, o2)` | ejecutarla es ejecutar `o1` y luego `o2`: $F_{\text{componer}(o_1, o_2)} = F_{o_2} \circ F_{o_1}$ |
+| `rutina(p)(g)(v)` | es repetir $v$ veces avanzar $p$ y girar hacia $g$; fijados $p$ y $g$, es una función $\mathbb{Z} \to \text{Orden}$ |
+| `aplicarA([e_1, ..., e_k], o)` | $[F(e_1, o), \ldots, F(e_k, o)]$ |
+| `transformar(o, f)` | $T_f(o)$, definida abajo |
+
+$T_f$ cambia cada hoja del árbol de la orden por $f$ aplicada a esa hoja y
+deja igual todo lo demás:
+
+```math
+T_f(b) = f(b) \quad \text{si } b \text{ es Avanzar o Girar}
+```
+
+```math
+T_f(\text{Repetir}(n, o)) = \text{Repetir}(n, T_f(o)), \qquad T_f(\text{Secuencia}([o_1, \ldots, o_k])) = \text{Secuencia}([T_f(o_1), \ldots, T_f(o_k)])
+```
+
+Se supone que $f$ termina y devuelve una orden para cualquier orden que
+reciba; las funciones de las pruebas lo cumplen porque terminan en
+`case otra => otra`.
+
+## 3. Demostración
+
+### 3.1 `componer`: la rutina compuesta equivale a ejecutar sus partes
+
+Sea $e' = P_e(e, o_1)$. Siguiendo el código de `ejecutar` con el modelo de
+sustitución:
+
+```math
+\begin{aligned}
+P_e(e, \text{componer}(o_1, o_2))
+  &\rightarrow P_e\big(e, \text{Secuencia}([o_1, o_2])\big) \\
+  &\rightarrow P_e\big(P_e(e, o_1),\ \text{Secuencia}([o_2])\big) = P_e\big(e',\ \text{Secuencia}([o_2])\big) && (\texttt{primera :: resto}) \\
+  &\rightarrow P_e\big(P_e(e', o_2),\ \text{Secuencia}(\text{Nil})\big) && (\texttt{primera :: resto}) \\
+  &\rightarrow P_e(e', o_2) = P_e\big(P_e(e, o_1),\ o_2\big) && (\texttt{Nil})
+\end{aligned}
+```
+
+Y por el teorema del punto 2 aplicado dos veces:
+
+```math
+P_e(e, \text{componer}(o_1, o_2)) = F\big(F(e, o_1), o_2\big) = (F_{o_2} \circ F_{o_1})(e)
+```
+
+Es decir, ejecutar la orden compuesta deja al robot en el mismo estado que
+ejecutar la primera parte y, desde ahí, la segunda.
+
+```mermaid
+graph LR
+    E["e"] -- "componer(o1, o2)" --> E2["F(F(e, o1), o2)"]
+    E -- "o1" --> E1["F(e, o1)"]
+    E1 -- "o2" --> E2
+```
+
+**Consecuencias.**
+
+* *Agrupar distinto no cambia el efecto.* Como la composición de funciones
+  es asociativa,
+
+```math
+F_{\text{componer}(\text{componer}(a, b), c)} = F_c \circ (F_b \circ F_a) = (F_c \circ F_b) \circ F_a = F_{\text{componer}(a, \text{componer}(b, c))}
+```
+
+  aunque las dos órdenes son distintas, porque `componer` no aplana las
+  secuencias.
+
+* *El orden sí importa.* $F_{o_2} \circ F_{o_1}$ en general no es
+  $F_{o_1} \circ F_{o_2}$: `componer(Girar(D), Avanzar(3))` deja al robot en
+  $(3, 0, \text{Este})$ y `componer(Avanzar(3), Girar(D))` en
+  $(0, 3, \text{Este})$.
+
+* *Lo que mide el punto 3.* Como
+  $L(\text{componer}(o_1, o_2)) = L(o_1) +\!+ L(o_2)$, las básicas de la
+  compuesta son la suma de las de las partes, y su profundidad es
+  $1 + \max(h(o_1), h(o_2))$.
+
+### 3.2 `rutina`
+
+Con los tres argumentos, por sustitución:
+
+```math
+\text{rutina}(p)(g)(v) \rightarrow \text{Repetir}\big(v,\ \text{Secuencia}([\text{Avanzar}(p), \text{Girar}(g)])\big) = \text{Repetir}\big(v,\ \text{componer}(\text{Avanzar}(p), \text{Girar}(g))\big)
+```
+
+**Currificación.** Con solo los dos primeros, `rutina(p)(g) _` es la
+función
+
+```math
+v \mapsto \text{Repetir}\big(v,\ \text{componer}(\text{Avanzar}(p), \text{Girar}(g))\big) \quad : \quad \text{Int} \Rightarrow \text{Orden}
+```
+
+que no construye nada hasta que recibe $v$, y se puede usar con distintas
+veces sin volver a dar $p$ ni $g$.
+
+**La rutina equivale a repetir sus partes.** Sea
+$K = \text{componer}(\text{Avanzar}(p), \text{Girar}(g))$. Por el punto 2
+(caso `Repetir`) y por 3.1:
+
+```math
+F(e, \text{rutina}(p)(g)(v)) = F_K^{\,\max(v, 0)}(e), \qquad F_K = F_{\text{Girar}(g)} \circ F_{\text{Avanzar}(p)}
+```
+
+**El cuadrado de cualquier lado vuelve al principio.** Con la notación del
+punto 2:
+
+```math
+F_K(x, y, d) = \big(x + p\,\Delta_x(d),\ y + p\,\Delta_y(d),\ f(d, g)\big)
+```
+
+Al aplicar $F_K$ cuatro veces el robot mira, en orden,
+$d, f(d, g), f^2(d, g), f^3(d, g)$, que son las cuatro direcciones
+distintas porque $f(\cdot, g)$ recorre el ciclo de cuatro del punto 1. Entonces
+
+```math
+F_K^{\,4}(x, y, d) = \Big(x + p \sum_{d'} \Delta_x(d'),\ y + p \sum_{d'} \Delta_y(d'),\ f^4(d, g)\Big) = (x, y, d)
+```
+
+porque la suma de los cuatro vectores $\Delta$ es $(0, 0)$ y $f^4(d, g) = d$.
+Vale para todo estado, todo $p$ y los dos sentidos.
+(Pruebas: el cuadrado de lado 2 vuelve al origen; `cuadradoDe(4)`).
+
+**Básicas.** $\lvert L(\text{rutina}(p)(g)(v)) \rvert = 2\max(v, 0)$.
+(Prueba: `rutina(5)(Derecha)(6)` cuenta 12).
+
+### 3.3 `aplicarA`
+
+Por sustitución:
+
+```math
+P_a([e_1, \ldots, e_k], o) \rightarrow [e_1, \ldots, e_k].\text{map}(e \mapsto P_e(e, o)) = [P_e(e_1, o), \ldots, P_e(e_k, o)]
+```
+
+y por el teorema del punto 2 eso es $[F(e_1, o), \ldots, F(e_k, o)]$, que es
+la especificación. `map` produce una lista del mismo tamaño y en el mismo
+orden, y cada elemento depende solo de su propio estado. De ahí:
+
+* $P_a(\text{Nil}, o) = \text{Nil}$ y $P_a([e], o) = [P_e(e, o)]$.
+* Si $F_o$ es la identidad (el cuadrado, `Secuencia(Nil)`), la lista sale
+  igual a como entró.
+
+### 3.4 `transformar`
+
+Sea $P_t$ = `transformar`. Hay que demostrar
+$\forall o : P_t(o, f) == T_f(o)$.
+
+**Casos base.** Si $b$ es `Avanzar` o `Girar`:
+$P_t(b, f) \rightarrow f(b) = T_f(b)$.
+
+**Caso de inducción `Repetir(n, o)`.** HI: $P_t(o, f) == T_f(o)$.
+
+```math
+P_t(\text{Repetir}(n, o), f) \rightarrow \text{Repetir}(n, P_t(o, f)) = \text{Repetir}(n, T_f(o)) = T_f(\text{Repetir}(n, o))
+```
+
+**Caso de inducción `Secuencia([o_1, ..., o_k])`.** HI: para cada $i$,
+$P_t(o_i, f) == T_f(o_i)$.
+
+```math
+\begin{aligned}
+P_t(\text{Secuencia}([o_1, \ldots, o_k]), f)
+  &\rightarrow \text{Secuencia}\big([o_1, \ldots, o_k].\text{map}(x \mapsto P_t(x, f))\big) \\
+  &= \text{Secuencia}([P_t(o_1, f), \ldots, P_t(o_k, f)]) \\
+  &= \text{Secuencia}([T_f(o_1), \ldots, T_f(o_k)]) && \text{(HI)} \\
+  &= T_f(\text{Secuencia}([o_1, \ldots, o_k]))
+\end{aligned}
+```
+
+Con $k = 0$ queda `Secuencia(Nil)` en los dos lados. Por inducción
+estructural, $\forall o : P_t(o, f) == T_f(o)$.
+
+**Terminación.** Los llamados recursivos son sobre órdenes de adentro, con
+$\text{tam}$ menor, igual que en el punto 3. A $f$ se la llama una sola vez
+por cada hoja y su resultado no se vuelve a recorrer. Por eso, aunque $f$
+devuelva una compuesta, no hay ciclos. (Prueba: con
+$f(o) = \text{Repetir}(2, o)$, `transformar(Avanzar(2), f)` da
+`Repetir(2, Avanzar(2))` y no se sigue anidando).
+
+## 4. Propiedades que se deducen de la especificación
+
+**Con la identidad no cambia nada.** $T_{\text{id}}(o) = o$. Por inducción:
+en las hojas $\text{id}(b) = b$; en `Repetir`,
+$\text{Repetir}(n, T_{\text{id}}(o)) = \text{Repetir}(n, o)$ por HI, y lo
+mismo en cada elemento de `Secuencia`.
+
+**Si $f$ lleva básicas en básicas, la forma se conserva.** Para todo $o$:
+
+```math
+\lvert L(T_f(o)) \rvert = \lvert L(o) \rvert, \qquad h(T_f(o)) = h(o)
+```
+
+Por inducción: en una hoja, $f(b)$ es básica, así que cuenta 1 y tiene
+profundidad 1, igual que $b$. En `Repetir` las veces son las mismas y, por
+HI, la orden de adentro cuenta lo mismo y tiene la misma profundidad. En
+`Secuencia` se suman y se toma el máximo de valores iguales por HI.
+
+**`transformar` respeta `componer` y `rutina`.** Por sustitución:
+
+```math
+T_f(\text{componer}(a, b)) = T_f(\text{Secuencia}([a, b])) = \text{componer}(T_f(a), T_f(b))
+```
+
+y con `doblar` (`Avanzar(n)` pasa a `Avanzar(2n)`, lo demás queda igual):
+
+```math
+T_{\text{doblar}}(\text{rutina}(p)(g)(v)) = \text{Repetir}\big(v,\ \text{Secuencia}([\text{Avanzar}(2p), \text{Girar}(g)])\big) = \text{rutina}(2p)(g)(v)
+```
+
+En particular `transformar(cuadrado, doblar) == rutina(2)(Derecha)(4)`, el
+cuadrado de lado 2, que por 3.2 también vuelve al origen.
+
+## 5. Casos de prueba propios
+
+Están en `RobotCuadriculaPunto4Test.scala`.
+
+| Prueba | Qué cubre de la demostración |
+|---|---|
+| `componer(Girar(I), Avanzar(3))` da `Sec[Girar(I), Avanzar(3)]` | definición de `componer` con el giro primero |
+| `componer` no aplana una secuencia que ya trae | la compuesta es exactamente `Secuencia([o1, o2])` |
+| las básicas de `componer(cuadrado, Avanzar(7))` son $8 + 1$ | $L(\text{componer}) = L(o_1) +\!+ L(o_2)$ (3.1) |
+| `componer(Avanzar(1), cuadrado)` tiene profundidad 4 | $1 + \max(h(o_1), h(o_2))$ (3.1) |
+| `componer(Girar(D), Avanzar(3))` lleva a $(3, 0, \text{Este})$ | $F_{o_2} \circ F_{o_1}$; el orden importa (3.1) |
+| `rutina(2)(Izquierda)(3)` arma la repetición | sustitución en `rutina` (3.2) |
+| `rutina(0)(Derecha)(2)` deja `Avanzar(0)` adentro | `pasos` se copia sin cambios |
+| `rutina(3)(Izquierda) _` sirve con 1 y con 5 veces | currificación (3.2) |
+| `rutina(5)(Derecha)(6)` cuenta 12 | $2\max(v, 0)$ (3.2) |
+| `rutina(2)(Derecha)(4)` vuelve al origen | $F_K^{\,4} = \text{id}$ con $p = 2$ (3.2) |
+| `rutina(4)(Izquierda)(0)` deja el estado igual | $F_K^{\,0} = \text{id}$ |
+| `aplicarA` con un giro cambia solo la dirección | `map` con el caso `Girar` (3.3) |
+| `aplicarA` conserva el orden de la lista | `map` mantiene posiciones (3.3) |
+| `aplicarA` con el cuadrado deja cada estado igual | $F_{\text{cuadrado}} = \text{id}$ para todo estado |
+| `aplicarA([e], o) == [ejecutar(e, o)]` | caso de un solo estado (3.3) |
+| `aplicarA` con `Secuencia(Nil)` devuelve los mismos estados | $F_{\text{Secuencia(Nil)}} = \text{id}$ |
+| `transformar` con `alReves` cambia los giros | casos base y `Secuencia` (3.4) |
+| `transformar(Avanzar(3), triple)` da `Avanzar(9)` | caso base: $T_f(b) = f(b)$ |
+| `transformar` llega a `Repetir` anidados | caso `Repetir` con HI sobre otro `Repetir` |
+| `transformar` con `triple` conserva cuenta y profundidad | la forma se conserva (4) |
+| $f(o) = \text{Repetir}(2, o)$ se aplica una sola vez | terminación: no se recorre el resultado de $f$ (3.4) |
+| triplicar los avances de `Sec[Avanzar(2), Avanzar(1)]` lleva a $(0, 9, \text{Norte})$ | $T_f$ junto con $F$ del punto 2 |
