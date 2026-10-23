@@ -918,3 +918,204 @@ flowchart RL
 Con la derecha el cuadrado queda en las casillas con $x \ge 0$; con la
 izquierda, en las de $x \le 0$. En los dos casos el robot termina en
 `(0,0,N)`.
+
+---
+
+# Informe de proceso — Punto 5: `simplificar`
+
+## Definición de la función
+
+```scala
+def simplificar(o: Orden): Orden = {
+
+  def reducir(ordenes: List[Orden]): List[Orden] = ordenes match {
+    case Nil                               => Nil
+    case Avanzar(0) :: resto               => reducir(resto)
+    case Secuencia(internas) :: resto      => internas ++ reducir(resto)
+    case Avanzar(a) :: Avanzar(b) :: resto => reducir(Avanzar(a + b) :: resto)
+    case primera :: resto                  => primera :: reducir(resto)
+  }
+
+  def pasada(o: Orden): Orden = o match {
+    case Avanzar(_)                      => o
+    case Girar(_)                        => o
+    case Repetir(veces, _) if veces <= 0 => Secuencia(Nil)
+    case Repetir(1, orden)               => orden
+    case Repetir(_, Secuencia(Nil))      => Secuencia(Nil)
+    case Repetir(veces, orden)           => Repetir(veces, pasada(orden))
+    case Secuencia(List(unica))          => unica
+    case Secuencia(ordenes)              => Secuencia(reducir(ordenes).map(pasada))
+  }
+
+  def hastaQueNoCambie(actual: Orden): Orden = {
+    val siguiente = pasada(actual)
+    if (siguiente == actual) actual else hastaQueNoCambie(siguiente)
+  }
+
+  hastaQueNoCambie(o)
+}
+```
+
+La función tiene tres partes:
+
+- `reducir` trabaja sobre la lista de una secuencia. Quita los `Avanzar(0)`,
+  mete en la lista los elementos de las secuencias que vienen adentro y junta
+  dos avances seguidos en uno solo.
+- `pasada` aplica las reglas **en el nodo** que recibe y después baja a lo
+  que ese nodo contiene. Lo que aparece nuevo después de aplicar una regla
+  (por ejemplo, la orden que estaba dentro de un `Repetir(1, ...)`) no se
+  vuelve a revisar en la misma pasada.
+- `hastaQueNoCambie` repite pasadas hasta que una deja la orden igual. Ese es
+  el punto fijo, y es lo que devuelve `simplificar`.
+
+Las reglas, en resumen:
+
+| Regla | Antes | Después |
+|---|---|---|
+| R1 | `Repetir(n, o)` con $n \le 0$ | `Secuencia(Nil)` |
+| R2 | `Repetir(1, o)` | `o` |
+| R3 | `Repetir(n, Secuencia(Nil))` | `Secuencia(Nil)` |
+| R4 | `Secuencia(List(u))` | `u` |
+| R5 | `Avanzar(0)` dentro de una secuencia | se quita |
+| R6 | `Secuencia(internas)` dentro de una secuencia | sus elementos quedan en la lista de afuera |
+| R7 | `Avanzar(a)`, `Avanzar(b)` seguidos en una secuencia | `Avanzar(a + b)` |
+
+---
+
+## Ejemplo: una orden que necesita varias pasadas
+
+```scala
+simplificar(Secuencia(List(Avanzar(1), Repetir(1, Secuencia(List(Avanzar(0), Avanzar(5)))))))
+```
+
+Para abreviar escribimos `A(n)` por `Avanzar(n)`, `Sec[...]` por
+`Secuencia(List(...))` y `Rep(n, o)` por `Repetir(n, o)`. La orden de
+entrada es:
+
+```
+Sec[A(1), Rep(1, Sec[A(0), A(5)])]
+```
+
+```mermaid
+graph TD
+    S0["Secuencia"] --> A1["Avanzar(1)"]
+    S0 --> R["Repetir(1, ...)"]
+    R --> S1["Secuencia"]
+    S1 --> Z["Avanzar(0)"]
+    S1 --> A5["Avanzar(5)"]
+```
+
+### Pasada 1
+
+`pasada` recibe una secuencia de dos elementos, así que no aplica R4 y entra
+al último caso.
+
+| Paso | Llamado | Caso que aplica | Resultado |
+|---|---|---|---|
+| 1 | `reducir([A(1), Rep(1, ...)])` | `primera :: resto` | `A(1) :: reducir([Rep(1, ...)])` |
+| 2 | `reducir([Rep(1, ...)])` | `primera :: resto` | `Rep(1, ...) :: reducir(Nil)` |
+| 3 | `reducir(Nil)` | `Nil` | `Nil` |
+| 4 | `map(pasada)` sobre `[A(1), Rep(1, Sec[A(0), A(5)])]` | `Avanzar` y R2 | `[A(1), Sec[A(0), A(5)]]` |
+
+Resultado de la pasada 1:
+
+```
+Sec[A(1), Sec[A(0), A(5)]]
+```
+
+R2 quitó el `Repetir`, pero la secuencia que quedó adentro no se revisa en
+esta pasada: `pasada` ya bajó por ese nodo.
+
+### Pasada 2
+
+| Paso | Llamado | Caso que aplica | Resultado |
+|---|---|---|---|
+| 1 | `reducir([A(1), Sec[A(0), A(5)]])` | `primera :: resto` (el segundo no es un avance) | `A(1) :: reducir([Sec[A(0), A(5)]])` |
+| 2 | `reducir([Sec[A(0), A(5)]])` | R6 | `[A(0), A(5)] ++ reducir(Nil)` = `[A(0), A(5)]` |
+| 3 | `map(pasada)` sobre `[A(1), A(0), A(5)]` | `Avanzar` | `[A(1), A(0), A(5)]` |
+
+Resultado de la pasada 2:
+
+```
+Sec[A(1), A(0), A(5)]
+```
+
+### Pasada 3
+
+| Paso | Llamado | Caso que aplica | Resultado |
+|---|---|---|---|
+| 1 | `reducir([A(1), A(0), A(5)])` | R7 con $a = 1, b = 0$ | `reducir([A(1), A(5)])` |
+| 2 | `reducir([A(1), A(5)])` | R7 con $a = 1, b = 5$ | `reducir([A(6)])` |
+| 3 | `reducir([A(6)])` | `primera :: resto` | `[A(6)]` |
+| 4 | `map(pasada)` sobre `[A(6)]` | `Avanzar` | `[A(6)]` |
+
+Resultado de la pasada 3:
+
+```
+Sec[A(6)]
+```
+
+En el paso 1 el `A(0)` se juntó con el `A(1)` antes de que R5 lo quitara;
+da lo mismo, porque sumar cero no cambia el avance.
+
+### Pasada 4
+
+`pasada(Sec[A(6)])` entra por R4 y devuelve `A(6)`.
+
+### Pasada 5
+
+`pasada(A(6))` devuelve `A(6)`. Como es igual a la orden que entró,
+`hastaQueNoCambie` se detiene.
+
+### Resumen
+
+| Pasada | Orden que sale | Regla que actuó | Nodos del árbol |
+|---|---|---|---|
+| entrada | `Sec[A(1), Rep(1, Sec[A(0), A(5)])]` | — | 6 |
+| 1 | `Sec[A(1), Sec[A(0), A(5)]]` | R2 | 5 |
+| 2 | `Sec[A(1), A(0), A(5)]` | R6 | 4 |
+| 3 | `Sec[A(6)]` | R7 dos veces | 2 |
+| 4 | `A(6)` | R4 | 1 |
+| 5 | `A(6)` | ninguna: punto fijo | 1 |
+
+```mermaid
+flowchart LR
+    P0["Sec[A(1), Rep(1, Sec[A(0), A(5)])]"] -- "R2" --> P1["Sec[A(1), Sec[A(0), A(5)]]"]
+    P1 -- "R6" --> P2["Sec[A(1), A(0), A(5)]"]
+    P2 -- "R7" --> P3["Sec[A(6)]"]
+    P3 -- "R4" --> P4["A(6)"]
+    P4 -- "sin cambios" --> P4
+```
+
+Cada pasada que cambia algo deja el árbol con menos nodos, y por eso las
+pasadas no pueden seguir para siempre (ver el informe de corrección).
+
+### Lo que hace el robot
+
+Desde el estado inicial, la orden original y la simplificada llevan al mismo
+lugar:
+
+| Orden | Estados por los que pasa | Final |
+|---|---|---|
+| original | `(0,0,N)` → `A(1)` → `(0,1,N)` → `A(0)` → `(0,1,N)` → `A(5)` → `(0,6,N)` | `(0,6,N)` |
+| simplificada | `(0,0,N)` → `A(6)` → `(0,6,N)` | `(0,6,N)` |
+
+---
+
+## Ejemplo 2: el cuadrado ya está simplificado
+
+```scala
+simplificar(Repetir(4, Secuencia(List(Avanzar(1), Girar(Derecha)))))
+```
+
+| Paso | Llamado | Caso que aplica | Resultado |
+|---|---|---|---|
+| 1 | `pasada(Rep(4, Sec[A(1), Girar(D)]))` | `Repetir(veces, orden)` | `Rep(4, pasada(Sec[A(1), Girar(D)]))` |
+| 2 | `pasada(Sec[A(1), Girar(D)])` | `Secuencia(ordenes)` | `Sec[reducir(...).map(pasada)]` |
+| 3 | `reducir([A(1), Girar(D)])` | `primera :: resto` dos veces | `[A(1), Girar(D)]` |
+| 4 | vuelve al paso 1 | — | `Rep(4, Sec[A(1), Girar(D)])` |
+
+La primera pasada ya devuelve la misma orden, así que `hastaQueNoCambie` se
+detiene ahí y `simplificar(cuadrado) == cuadrado`. Ninguna regla aplica: el
+`4` no es ni `0` ni `1`, la secuencia tiene dos elementos y el avance no está
+junto a otro avance.
